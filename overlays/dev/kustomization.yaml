@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dev
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-deployment.yaml
+  - path: patch-service.yaml
+
+replicas:
+  - name: harness-demo-app
+    count: 2
+
+# The image tag is the promotion unit. The pipeline bumps `newTag` here via a
+# pull request; this file is the source of truth for what runs in dev.
+images:
+  - name: harness-demo-app
+    newName: docker.io/sharmaamanrajesh/harness-demo-app
+    newTag: "bootstrap"

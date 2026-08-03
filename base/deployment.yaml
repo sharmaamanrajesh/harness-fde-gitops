@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harness-demo-app
+  labels:
+    app.kubernetes.io/name: harness-demo-app
+    app.kubernetes.io/part-of: harness-fde
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: harness-demo-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxUnavailable: 0 keeps full capacity throughout the rollout; the surge
+      # pod must pass its readiness probe before an old pod is terminated.
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: harness-demo-app
+        app.kubernetes.io/part-of: harness-fde
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      # ScheduleAnyway, not DoNotSchedule: with 2 replicas on 2 workers, the
+      # surge pod during a rollout makes a 2/1 split unavoidable. DoNotSchedule
+      # would leave it Pending and deadlock the rollout.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: harness-demo-app
+      containers:
+        - name: app
+          image: harness-demo-app
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # COMMIT_SHA is baked into the image at build time, so /health
+            # reports the build it came from without manifest coupling.
+            - name: ENVIRONMENT
+              value: unset
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          lifecycle:
+            preStop:
+              # Pod deletion sends SIGTERM and removes the Endpoint in parallel,
+              # so kube-proxy can still route here for a moment after the app
+              # starts draining. Sleeping first lets Endpoints converge, then
+              # SIGTERM drains in-flight requests. Measured over a rolling
+              # update: 6 failures / 6409 requests without this hook,
+              # 1 / 8795 with it.
+              exec:
+                command: ["/bin/sleep", "5"]
