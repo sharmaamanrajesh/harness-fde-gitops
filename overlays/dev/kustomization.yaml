@@ -19,4 +19,4 @@ replicas:
 images:
   - name: harness-demo-app
     newName: docker.io/sharmaamanrajesh/harness-demo-app
-    newTag: "does-not-exist"
+    newTag: "6af5bbe59f2a62877e344276ca03898969519348"
