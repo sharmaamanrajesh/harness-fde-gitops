@@ -18,4 +18,4 @@ replicas:
 images:
   - name: harness-demo-app
     newName: docker.io/sharmaamanrajesh/harness-demo-app
-    newTag: "bootstrap"
+    newTag: "931c1d2066134dde998433002902d36aaa2d92a2"
